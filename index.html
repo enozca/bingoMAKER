@@ -307,8 +307,8 @@
 
   <!-- Cartela -->
   <div class="card">
-    <h1 class="title" contenteditable="true" spellcheck="false">HEXABINGO</h1>
-    <p class="subtitle" contenteditable="true" spellcheck="false">Previsões da Sessão</p>
+    <h1 class="title" id="bingoTitle" contenteditable="true" spellcheck="false">HEXABINGO</h1>
+    <p class="subtitle" id="bingoSubtitle" contenteditable="true" spellcheck="false">Previsões da Sessão</p>
 
     <div class="grid" id="bingoGrid"></div>
   </div>
@@ -325,7 +325,73 @@
     let currentSize = 5;
     let mode = 'play';
 
-    function renderGrid() {
+    // Funções de salvamento e carregamento via localStorage
+    function saveData() {
+      const data = {
+        title: document.getElementById('bingoTitle').innerText,
+        subtitle: document.getElementById('bingoSubtitle').innerText,
+        size: currentSize,
+        cells: [],
+        colors: {
+          accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+          bgPage: getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim(),
+          bgCard: getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim(),
+          bgCell: getComputedStyle(document.documentElement).getPropertyValue('--bg-cell').trim(),
+          marked: getComputedStyle(document.documentElement).getPropertyValue('--marked-bg').trim(),
+          border: getComputedStyle(document.documentElement).getPropertyValue('--border-cell').trim(),
+          text: getComputedStyle(document.documentElement).getPropertyValue('--text-cell').trim(),
+        }
+      };
+
+      document.querySelectorAll('.cell').forEach(cell => {
+        data.cells.push({
+          text: cell.innerText,
+          marked: cell.classList.contains('marked')
+        });
+      });
+
+      localStorage.setItem('bingoMakerData', JSON.stringify(data));
+    }
+
+    function loadData() {
+      const saved = localStorage.getItem('bingoMakerData');
+      if (!saved) return false;
+
+      try {
+        const data = JSON.parse(saved);
+        currentSize = data.size || 5;
+        document.getElementById('btnSize').innerText = currentSize === 5 ? '4x4' : '5x5';
+        
+        if (data.title) document.getElementById('bingoTitle').innerText = data.title;
+        if (data.subtitle) document.getElementById('bingoSubtitle').innerText = data.subtitle;
+
+        // Restaurar cores
+        if (data.colors) {
+          const setVar = (varName, val, pickerId) => {
+            if (val) {
+              document.documentElement.style.setProperty(varName, val);
+              const picker = document.getElementById(pickerId);
+              if (picker) picker.value = val;
+            }
+          };
+          setVar('--accent', data.colors.accent, 'pickerAccent');
+          setVar('--bg-page', data.colors.bgPage, 'pickerBgPage');
+          setVar('--bg-card', data.colors.bgCard, 'pickerBgCard');
+          setVar('--bg-cell', data.colors.bgCell, 'pickerBgCell');
+          setVar('--marked-bg', data.colors.marked, 'pickerMarked');
+          setVar('--border-cell', data.colors.border, 'pickerBorder');
+          setVar('--text-cell', data.colors.text, 'pickerText');
+        }
+
+        renderGrid(data.cells);
+        return true;
+      } catch (e) {
+        console.error("Erro ao carregar dados salvos:", e);
+        return false;
+      }
+    }
+
+    function renderGrid(savedCells = null) {
       const grid = document.getElementById('bingoGrid');
       grid.innerHTML = '';
       grid.className = currentSize === 4 ? 'grid grid-4' : 'grid';
@@ -336,12 +402,28 @@
         cell.className = 'cell';
         cell.contentEditable = (mode === 'edit');
         cell.spellcheck = false;
-        cell.innerText = defaultTexts[i] || `Previsão ${i + 1}`;
 
+        // Recuperar texto e marcação salvos ou usar padrão
+        if (savedCells && savedCells[i]) {
+          cell.innerText = savedCells[i].text;
+          if (savedCells[i].marked) {
+            cell.classList.add('marked');
+          }
+        } else {
+          cell.innerText = defaultTexts[i] || `Previsão ${i + 1}`;
+        }
+
+        // Evento de clique para marcar/desmarcar
         cell.addEventListener('click', () => {
           if (mode === 'play') {
             cell.classList.toggle('marked');
+            saveData();
           }
+        });
+
+        // Evento para salvar alterações de texto em tempo real
+        cell.addEventListener('input', () => {
+          saveData();
         });
 
         grid.appendChild(cell);
@@ -363,10 +445,12 @@
       currentSize = currentSize === 5 ? 4 : 5;
       document.getElementById('btnSize').innerText = currentSize === 5 ? '4x4' : '5x5';
       renderGrid();
+      saveData();
     }
 
     function clearMarks() {
       document.querySelectorAll('.cell.marked').forEach(c => c.classList.remove('marked'));
+      saveData();
     }
 
     // Gerenciador de cores
@@ -380,6 +464,7 @@
         const el = document.getElementById(id);
         el.addEventListener('input', (e) => {
           document.documentElement.style.setProperty(variable, e.target.value);
+          saveData();
         });
       };
 
@@ -391,7 +476,7 @@
       bind('pickerBorder', '--border-cell');
       bind('pickerText', '--text-cell');
 
-      // Fecha o menu de cores ao clicar fora dele
+      // Fechar o menu de cores ao clicar fora dele
       document.addEventListener('click', (e) => {
         const panel = document.getElementById('colorPanel');
         const btn = document.getElementById('btnColor');
@@ -401,8 +486,16 @@
       });
     }
 
+    // Ouvintes para salvar alterações de título e subtítulo
+    document.getElementById('bingoTitle').addEventListener('input', saveData);
+    document.getElementById('bingoSubtitle').addEventListener('input', saveData);
+
     setupColorPickers();
-    renderGrid();
+
+    // Inicialização: Tenta carregar dados salvos; se não houver, renderiza padrão
+    if (!loadData()) {
+      renderGrid();
+    }
   </script>
 </body>
 </html>
